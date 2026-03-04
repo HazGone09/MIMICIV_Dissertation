@@ -73,12 +73,13 @@ opiate_admissions <- Patient_Diagnoses %>%
 #Now i want to perform a left join in order to display the 'long_title' RFA.
 
 Opioid_related_admissions <- opiate_admissions %>%
-  left_join(ICD_diagnoses %>% select(icd_code, long_title), by = "icd_code")
+  left_join(ICD_diagnoses %>% 
+              select(icd_code, long_title), by = "icd_code")
 
 # nrow(opiate_admissions) # = 12,296, not to sure why sidebar displays "??"
 # perfect, now i want to create a table to show my the number of admissions per reason, so i can work out the most common reasons for admission ect.
 
-Op_admission_counts <- opiate_admissions %>%
+Op_admission_counts <- Opioid_related_admissions %>%
   group_by(icd_code, long_title) %>%
   summarise(n_admissions = n(), .groups = "drop") %>%
   arrange(desc(n_admissions))
@@ -142,6 +143,10 @@ admission_rates <- admissions_per_patient %>%
     .groups = "drop"
   )
 
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+# Graphing mean & median admission rates.
 
 #ggplot(admission_rates,
 #       aes(x = anchor_year_group, y = median_admissions)) +
@@ -208,9 +213,22 @@ ggplot(age_dist, aes(x = "", y = n, fill = age_band)) +
     plot.title = element_text(size = 18, face = "bold", hjust = 0.5),
     legend.title = element_text(size = 12),
     legend.text = element_text(size = 11)
-  )
+  ) # pie chart to highlight age distribution.
 
-# pie chart to highlight age distribution.
+
+ggplot(PtList, aes(x = anchor_age)) +
+  geom_histogram(
+    binwidth = 5,
+    boundary = 0,
+    colour = "white"
+  ) +
+  facet_wrap(~ gender, ncol = 1) +
+  labs(
+    x = "Age at admission",
+    y = "Number of patients",
+    title = "Age Distribution by Gender"
+  ) +
+  theme_minimal(base_size = 14) # Histogram to show show age by gender (as suggested by supervisor).
 
 Age_count <- PtList %>%
   count(anchor_age)
@@ -247,7 +265,6 @@ death_summary <- PtList %>%
     .groups = "drop"
   )
 
-
 ggplot(death_summary,
        aes(x = anchor_year_group, y = death_rate, group = 1)) +
   geom_line(linewidth = 1, colour = "#D55E00") +
@@ -255,8 +272,73 @@ ggplot(death_summary,
   scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
   labs(x = "Anchor Year Group", y = "In-hospital Death Rate", title = "In-hospital Mortality Over Time") +
   theme_minimal(base_size = 14) +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) # Total mortality rate over time
 
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+# Mortality rates by age band (as suggested by supervisor)
+
+mortality_age_df <- PtList %>%
+  filter(died_during_admission == TRUE) %>%
+  group_by(anchor_year_group, age_band) %>%
+  summarise(
+    n_deaths = n(),
+    .groups = "drop"
+  )
+
+ggplot(mortality_age_df,
+       aes(x = anchor_year_group,
+           y = n_deaths,
+           colour = age_band,
+           group = age_band)) +
+  geom_line(linewidth = 1.1) +
+  geom_point(size = 2) +
+  labs(
+    x = "Anchor Year Group",
+    y = "Number of inpatient deaths",
+    title = "Inpatient Mortality Over Time by Age Band",
+    colour = "Age band"
+  ) +
+  theme_minimal(base_size = 14)
+
+
+admissions_age_df <- PtList %>%
+  group_by(anchor_year_group, age_band) %>%
+  summarise(
+    n_admissions = n(),
+    .groups = "drop"
+  )
+
+deaths_age_df <- PtList %>%
+  filter(died_during_admission == TRUE) %>%
+  group_by(anchor_year_group, age_band) %>%
+  summarise(
+    n_deaths = n(),
+    .groups = "drop"
+  )
+
+mortality_age_rates <- admissions_age_df %>%
+  left_join(deaths_age_df,
+            by = c("anchor_year_group", "age_band")) %>%
+  mutate(
+    n_deaths = replace_na(n_deaths, 0),
+    mortality_rate = n_deaths / n_admissions
+  )
+
+ggplot(mortality_age_rates,
+       aes(x = anchor_year_group,
+           y = mortality_rate,
+           colour = age_band,
+           group = age_band)) +
+  geom_line(linewidth = 1.1) +
+  geom_point(size = 2) +
+  labs(
+    x = "Anchor Year Group",
+    y = "Inpatient mortality rate",
+    title = "Inpatient Mortality Rate Over Time by Age Band",
+    colour = "Age band"
+  ) +
+  theme_minimal(base_size = 14)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -268,7 +350,7 @@ ggplot(death_summary,
 scripts <- read_csv_duckdb('prescriptions.csv')
 
 
-# still doesn't like it, lets try and force it through
+# still doesn't like it, lets try and force it through by setting by our PtList
 Opiate_Related_Prescriptions <- scripts %>%
   semi_join(PtList %>% distinct(subject_id), by = "subject_id") %>%
   as_tibble()
@@ -286,17 +368,19 @@ Opiate_Related_Prescriptions <- scripts %>%
 
 emar <- read_csv_duckdb('emar.csv.gz')
 
-emar <- emar %>%
+emar_opi <- emar %>%
   semi_join(PtList %>% distinct(subject_id), by = "subject_id") %>%
   as_tibble()         # 6.3 million records... but they are marked as 'administered, not given, ect. I just want administered
+
+
+emar_opi_Given <- emar_opi %>%
+  filter(event_txt == "Administered") 
+# >4.5million total items administered, not filtered to opiates though.
+
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 # Opioid Prescription Stats
-
-emarGiven <- emar %>%
-  filter(event_txt == "Administered") 
-# >4.5million total items administered, not filtered to opiates though.
 
 # grouping opioids
 # initial plan is to create a lookup table, and filter the emarGiven by the lookup table.
@@ -314,7 +398,7 @@ Opi_lookup <- c(
 
 # This is our Lookup table, using the most popular opiates, we will run searches later for antagonists such as naltrexone and naloxone.
 
-opioid_prescriptions <- emarGiven %>%
+opioid_prescriptions <- emar_opi_Given %>%
   filter(grepl(paste(Opi_lookup, collapse = "|"), toupper(medication))) 
 
 # this has returned exactly what i wanted it to, showing me that there are 56 different types of opioids prescribed within mimic according to the list that -
@@ -351,17 +435,17 @@ opioid_script_summary <- emar_opioids_simplified %>%
 OpiCount <- opioid_prescriptions %>%
   count(medication) # all opioids prescribed
 
-OpiCount_Simple <- opioid_simplified %>%
-  count(primary_opioid) # simplified list as per
+OpiCount_Simple <- emar_opioids_simplified %>%
+  count(primary_opioid) # simplified list
 
-# Most commonly given opiate, as per simple list = 'OXYCODONE',  then 'HYDROMORPHONE', then 'MORPHINE', then 'METHADONE'.
+# Most commonly given opiates, as per simple list = "Oxy.", "Hydromorph.", "Morphine"
 
 # ~~~~~~~~~~~~~~~Prescribing over time~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # as we now have a list of all the prescribed opioids, as well as an anchor year group, i can create a GGplot to show the rates of prescription of opiates
 # over time.
 
-emar_opioids_simplified <- opioid_simplified %>%
-  left_join(PtList %>%
+emar_opioids_simplified <- emar_opioids_simplified %>%
+  semi_join(PtList %>%
               distinct(subject_id, anchor_year_group, icd_code, long_title), by = "subject_id")
 
 
@@ -410,7 +494,25 @@ ggplot(opioid_plot_df,
        y = "Number of Administrations",
        title = "Opioid Prescription Count Over Time",
        fill = "Opioid") +
+  theme_minimal(base_size = 14) #Stacked Bar chart showing total no. administrations over A_Y_G
+
+ggplot(opioid_plot_df,
+       aes(x = anchor_year_group,
+           y = n_admins,
+           colour = primary_opioid,
+           group = primary_opioid)) +
+  geom_line(linewidth = 1.1) +
+  geom_point(size = 2) +
+  scale_colour_manual(values = opioid_colours) +
+  labs(
+    x = "Anchor Year Group",
+    y = "Number of opioid administrations",
+    title = "Opioid Administrations Over Time",
+    colour = "Opioid"
+  ) +
   theme_minimal(base_size = 14)
+
+
 
 # purrr is being used to create distinct plots by type of opioid.
 
