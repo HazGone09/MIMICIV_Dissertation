@@ -3,3 +3,6 @@ Course Focus is 'population health and medical science'
 The data used is MIMIC IV v3.1
 
 Project Aim: Identifying links between the administration of opiates within secondary care, and subsequent patient mental health deterioration.
+
+
+Initial code posted 4/3/26 includes cohort building and some graphical modelling to show initial observations.
