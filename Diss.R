@@ -154,10 +154,10 @@ admission_rates <- admissions_per_patient %>%
 #  labs(x = "Anchor Year Group", y = "Median Admissions per Patient", title = "Median Admission Rates Over Time") +
 #  theme_minimal(base_size = 14) #MEDIAN ROA -ALL 1
 
-#ggplot(admission_rates, aes(x = anchor_year_group, y = mean_admissions)) +
-#  geom_col(fill = "#0072B2") +
-#  labs(x = "Anchor Year Group", y = "Mean Admissions per Patient", title = "Admission Rates Over Time") +
-#  theme_minimal(base_size = 14) #MEAN ROA - ACTUAL DIFFERENTIATION
+ggplot(admission_rates, aes(x = anchor_year_group, y = mean_admissions)) +
+  geom_col(fill = "#0072B2") +
+  labs(x = "Anchor Year Group", y = "Mean Admissions per Patient", title = "Admission Rates Over Time") +
+  theme_minimal(base_size = 14) #MEAN ROA - ACTUAL DIFFERENTIATION
 
 
 
@@ -368,12 +368,12 @@ Opiate_Related_Prescriptions <- scripts %>%
 
 emar <- read_csv_duckdb('emar.csv.gz')
 
-emar_opi <- emar %>%
+emar_PtList <- emar %>%
   semi_join(PtList %>% distinct(subject_id), by = "subject_id") %>%
   as_tibble()         # 6.3 million records... but they are marked as 'administered, not given, ect. I just want administered
 
 
-emar_opi_Given <- emar_opi %>%
+emar_opi_Given <- emar_PtList %>%
   filter(event_txt == "Administered") 
 # >4.5million total items administered, not filtered to opiates though.
 
@@ -398,7 +398,7 @@ Opi_lookup <- c(
 
 # This is our Lookup table, using the most popular opiates, we will run searches later for antagonists such as naltrexone and naloxone.
 
-opioid_prescriptions <- emar_opi_Given %>%
+opioid_prescriptions <- emar_PtList %>%
   filter(grepl(paste(Opi_lookup, collapse = "|"), toupper(medication))) 
 
 # this has returned exactly what i wanted it to, showing me that there are 56 different types of opioids prescribed within mimic according to the list that -
@@ -445,7 +445,7 @@ OpiCount_Simple <- emar_opioids_simplified %>%
 # over time.
 
 emar_opioids_simplified <- emar_opioids_simplified %>%
-  semi_join(PtList %>%
+  left_join(PtList %>%
               distinct(subject_id, anchor_year_group, icd_code, long_title), by = "subject_id")
 
 
@@ -538,15 +538,15 @@ Opioid_plots <- opioid_plot_df %>%
   )
 
 
-iwalk(Opioid_plots,
-      ~ ggsave(
-        filename = paste0("opioid_", .y, ".tiff"),
-        plot = .x,
-        width = 8,
-        height = 5,
-        dpi = 300
-      ))
-# purrr being used to export graphs.
+#iwalk(Opioid_plots,
+#      ~ ggsave(
+#        filename = paste0("opioid_", .y, ".tiff"),
+#        plot = .x,
+#        width = 8,
+#        height = 5,
+#        dpi = 300
+#      ))
+
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -582,7 +582,7 @@ ADEP_lookup <- c(
 )
 
 
-Adep_prescriptions <- emarGiven %>%
+Adep_prescriptions <- emar_PtList %>%
   filter(
     grepl(
       paste(ADEP_lookup, collapse = "|"), toupper(medication)))
@@ -754,11 +754,11 @@ Adep_drug_plots <- Adep_Simple_count %>%
       )
   )
 
-iwalk(Adep_drug_plots,
-      ~ ggsave(
-        filename = paste0("Adep_", .y, ".tiff"),
-        plot = .x,
-        width = 8,
-        height = 5,
-        dpi = 300
-      ))
+#iwalk(Adep_drug_plots,
+#      ~ ggsave(
+#        filename = paste0("Adep_", .y, ".tiff"),
+#        plot = .x,
+#        width = 8,
+#        height = 5,
+#        dpi = 300
+#      ))
