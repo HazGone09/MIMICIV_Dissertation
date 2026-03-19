@@ -4,10 +4,10 @@
 
 # installing and loading packages
 
-install.packages("tidyverse")
-install.packages("duckdb")
-install.packages("duckplyr")
-install.packages("purrr")
+#install.packages("tidyverse")
+#install.packages("duckdb")
+#install.packages("duckplyr")
+#install.packages("purrr")
 
 library(tidyverse)
 library(duckdb)
@@ -33,7 +33,7 @@ library(purrr)
 #first things first, there's a lot of data within MIMIC, as opposed to actually looking for prescription of opiates within hospital, i want to find some info -
 #relating to admissions that were caused by opiates, I can then use this to see if any of these patients have previously been prescribed opiates by the hosp.
 
-#By working off of opioids, i can identify whether they are also receiving some form of psychiatric treatment, primarily by looking for administrations of 
+#By working off of opioids, i can identify whether they are also receiving some form of psychiatric treatment, primarily by looking for administrations of
 #Antidepressants like SSRI's.
 
 ICD_diagnoses <- read.csv("d_icd_diagnoses.csv") #loading icd diagnosis data into R to test for memory constraints.
@@ -42,10 +42,11 @@ ICD_diagnoses <- read.csv("d_icd_diagnoses.csv") #loading icd diagnosis data int
 #(which appear to be the main ones relating to opiates/addiction F11=ORD, T40=poisoning by narcotics)
 
 opiate_icd_codes <- ICD_diagnoses %>%
-  filter(startsWith(icd_code, "F11") | # Specific Code relating to Mental and behavioral disorders caused by use of opioids
-           startsWith(icd_code, "T40") | # Poisoning by Narcotic
-           startsWith(icd_code, "Z79891") # Long-term use of opioid analgesic
-         )
+  filter(
+    startsWith(icd_code, "F11") | # Specific Code relating to Mental and behavioral disorders caused by use of opioids
+      startsWith(icd_code, "T40") | # Poisoning by Narcotic
+      startsWith(icd_code, "Z79891") # Long-term use of opioid analgesic
+  )
 
 # we now have a list of codes relating to opiates, lets try and load the admissions table and use the list to work out admissions
 
@@ -61,7 +62,6 @@ patients <- read.csv("patients.csv")
 Patient_Diagnoses <- read.csv("diagnoses_icd.csv.gz")
 #view(Diagnoses_list) #ding ding ding! we have a winner, this is what we use to apply our icd diagnoses list to.
 
-
 opiate_admissions <- Patient_Diagnoses %>%
   filter(
     startsWith(icd_code, "F11") | # Opioid Related Conditions
@@ -69,12 +69,15 @@ opiate_admissions <- Patient_Diagnoses %>%
       startsWith(icd_code, "Z79891") # Long term use of opioid analgesia
   )
 
-#view(opiate_admissions) # this has returned a list of 12,296 admissions relating to opiates. 
+#view(opiate_admissions) # this has returned a list of 12,296 admissions relating to opiates.
 #Now i want to perform a left join in order to display the 'long_title' RFA.
 
 Opioid_related_admissions <- opiate_admissions %>%
-  left_join(ICD_diagnoses %>% 
-              select(icd_code, long_title), by = "icd_code")
+  left_join(
+    ICD_diagnoses %>%
+      select(icd_code, long_title),
+    by = "icd_code"
+  )
 
 # nrow(opiate_admissions) # = 12,296, not to sure why sidebar displays "??"
 # perfect, now i want to create a table to show my the number of admissions per reason, so i can work out the most common reasons for admission ect.
@@ -156,9 +159,12 @@ admission_rates <- admissions_per_patient %>%
 
 ggplot(admission_rates, aes(x = anchor_year_group, y = mean_admissions)) +
   geom_col(fill = "#0072B2") +
-  labs(x = "Anchor Year Group", y = "Mean Admissions per Patient", title = "Admission Rates Over Time") +
+  labs(
+    x = "Anchor Year Group",
+    y = "Mean Admissions per Patient",
+    title = "Admission Rates Over Time"
+  ) +
   theme_minimal(base_size = 14) #MEAN ROA - ACTUAL DIFFERENTIATION
-
 
 
 #PtList %>%
@@ -174,12 +180,14 @@ ggplot(admission_rates, aes(x = anchor_year_group, y = mean_admissions)) +
 
 # I now want to create a pie chart to show the ages of patients admitted.
 PtList <- PtList %>%
-  mutate(age_band = cut(
-    anchor_age,
-    breaks = c(18, 30, 40, 50, 60, 70, 80, Inf),
-    labels = c("18–29", "30–39", "40–49", "50–59", "60–69", "70–79", "80+"),
-    right = FALSE
-  )) # Age Banding.
+  mutate(
+    age_band = cut(
+      anchor_age,
+      breaks = c(18, 30, 40, 50, 60, 70, 80, Inf),
+      labels = c("18–29", "30–39", "40–49", "50–59", "60–69", "70–79", "80+"),
+      right = FALSE
+    )
+  ) # Age Banding.
 
 
 age_dist <- PtList %>%
@@ -222,7 +230,7 @@ ggplot(PtList, aes(x = anchor_age)) +
     boundary = 0,
     colour = "white"
   ) +
-  facet_wrap(~ gender, ncol = 1) +
+  facet_wrap(~gender, ncol = 1) +
   labs(
     x = "Age at admission",
     y = "Number of patients",
@@ -247,32 +255,16 @@ Deceasedcount <- PtList %>%
 # i would be interested in seeing pts that died during admission
 
 PtList <- PtList %>%
-  mutate(died_during_admission =
-           !is.na(deathtime) &
-           deathtime >= admittime &
-           deathtime <= dischtime)
-
-
-DDA <- PtList  %>%
-  count(died_during_admission) #DDA = 289
-
-death_summary <- PtList %>%
-  group_by(anchor_year_group) %>%
-  summarise(
-    deaths = sum(died_during_admission, na.rm = TRUE),
-    total_patients = n(),
-    death_rate = deaths / total_patients,
-    .groups = "drop"
+  mutate(
+    died_during_admission = !is.na(deathtime) &
+      deathtime >= admittime &
+      deathtime <= dischtime
   )
 
-ggplot(death_summary,
-       aes(x = anchor_year_group, y = death_rate, group = 1)) +
-  geom_line(linewidth = 1, colour = "#D55E00") +
-  geom_point(size = 3, colour = "#D55E00") +
-  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
-  labs(x = "Anchor Year Group", y = "In-hospital Death Rate", title = "In-hospital Mortality Over Time") +
-  theme_minimal(base_size = 14) +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) # Total mortality rate over time
+
+DDA <- PtList %>%
+  count(died_during_admission) #DDA = 289
+
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -286,11 +278,10 @@ mortality_age_df <- PtList %>%
     .groups = "drop"
   )
 
-ggplot(mortality_age_df,
-       aes(x = anchor_year_group,
-           y = n_deaths,
-           colour = age_band,
-           group = age_band)) +
+ggplot(
+  mortality_age_df,
+  aes(x = anchor_year_group, y = n_deaths, colour = age_band, group = age_band)
+) +
   geom_line(linewidth = 1.1) +
   geom_point(size = 2) +
   labs(
@@ -318,18 +309,21 @@ deaths_age_df <- PtList %>%
   )
 
 mortality_age_rates <- admissions_age_df %>%
-  left_join(deaths_age_df,
-            by = c("anchor_year_group", "age_band")) %>%
+  left_join(deaths_age_df, by = c("anchor_year_group", "age_band")) %>%
   mutate(
     n_deaths = replace_na(n_deaths, 0),
     mortality_rate = n_deaths / n_admissions
   )
 
-ggplot(mortality_age_rates,
-       aes(x = anchor_year_group,
-           y = mortality_rate,
-           colour = age_band,
-           group = age_band)) +
+ggplot(
+  mortality_age_rates,
+  aes(
+    x = anchor_year_group,
+    y = mortality_rate,
+    colour = age_band,
+    group = age_band
+  )
+) +
   geom_line(linewidth = 1.1) +
   geom_point(size = 2) +
   labs(
@@ -339,6 +333,39 @@ ggplot(mortality_age_rates,
     colour = "Age band"
   ) +
   theme_minimal(base_size = 14)
+
+
+#Mortality by Age Band and gender
+
+death_summary <- PtList %>%
+  group_by(anchor_year_group, gender, subject_id) %>%
+  summarise(
+    died = any(died_during_admission),
+    .groups = "drop"
+  ) %>%
+  group_by(anchor_year_group, gender) %>%
+  summarise(
+    deaths = sum(died),
+    total_patients = n(),
+    death_rate = deaths / total_patients,
+    .groups = "drop"
+  )
+
+ggplot(
+  death_summary,
+  aes(x = anchor_year_group, y = death_rate, colour = gender, group = gender)
+) +
+  geom_line(linewidth = 1.1) +
+  geom_point(size = 2) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+  labs(
+    x = "Anchor Year Group",
+    y = "In-hospital Death Rate",
+    title = "In-hospital Mortality Over Time by Gender",
+    colour = "Gender"
+  ) +
+  theme_minimal(base_size = 14)
+
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -370,13 +397,12 @@ emar <- read_csv_duckdb('emar.csv.gz')
 
 emar_PtList <- emar %>%
   semi_join(PtList %>% distinct(subject_id), by = "subject_id") %>%
-  as_tibble()         # 6.3 million records... but they are marked as 'administered, not given, ect. I just want administered
+  as_tibble() # 6.3 million records... but they are marked as 'administered, not given, ect. I just want administered
 
 
 emar_opi_Given <- emar_PtList %>%
-  filter(event_txt == "Administered") 
+  filter(event_txt == "Administered")
 # >4.5million total items administered, not filtered to opiates though.
-
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -386,20 +412,20 @@ emar_opi_Given <- emar_PtList %>%
 # initial plan is to create a lookup table, and filter the emarGiven by the lookup table.
 
 Opi_lookup <- c(
-  "MORPHINE" ,
-  "OXYCODONE" ,
-  "BUPRENORPHINE" ,
-  "METHADONE" ,
-  "HYDROMORPHONE" ,
-  "TRAMADOL" ,
-  "FENTANYL" ,
-  "HYDROCODONE" 
+  "MORPHINE",
+  "OXYCODONE",
+  "BUPRENORPHINE",
+  "METHADONE",
+  "HYDROMORPHONE",
+  "TRAMADOL",
+  "FENTANYL",
+  "HYDROCODONE"
 )
 
 # This is our Lookup table, using the most popular opiates, we will run searches later for antagonists such as naltrexone and naloxone.
 
 opioid_prescriptions <- emar_PtList %>%
-  filter(grepl(paste(Opi_lookup, collapse = "|"), toupper(medication))) 
+  filter(grepl(paste(Opi_lookup, collapse = "|"), toupper(medication)))
 
 # this has returned exactly what i wanted it to, showing me that there are 56 different types of opioids prescribed within mimic according to the list that -
 # - i defined. Now i want to simplify this down.
@@ -445,8 +471,11 @@ OpiCount_Simple <- emar_opioids_simplified %>%
 # over time.
 
 emar_opioids_simplified <- emar_opioids_simplified %>%
-  left_join(PtList %>%
-              distinct(subject_id, anchor_year_group, icd_code, long_title), by = "subject_id")
+  left_join(
+    PtList %>%
+      distinct(subject_id, anchor_year_group, icd_code, long_title),
+    by = "subject_id"
+  )
 
 
 opioid_plot_df <- emar_opioids_simplified %>%
@@ -474,7 +503,7 @@ opioid_order <- c(
 opioid_levels <- sort(unique(opioid_plot_df$primary_opioid))
 
 opioid_palette <- c(
-  "#0072B2",# lets make it pretty
+  "#0072B2", # lets make it pretty, i've had an ai generate all of my palettes for this project, graphics design is not my passion...
   "#D55E00",
   "#009E73",
   "#CC79A7",
@@ -484,23 +513,34 @@ opioid_palette <- c(
   "#000000"
 )
 
-opioid_colours <- setNames(opioid_palette[seq_along(opioid_levels)], opioid_levels)
+opioid_colours <- setNames(
+  opioid_palette[seq_along(opioid_levels)],
+  opioid_levels
+)
 
-ggplot(opioid_plot_df,
-       aes(x = anchor_year_group, y = n_admins, fill = primary_opioid)) +
+ggplot(
+  opioid_plot_df,
+  aes(x = anchor_year_group, y = n_admins, fill = primary_opioid)
+) +
   geom_col() +
   scale_fill_manual(values = opioid_colours) +
-  labs(x = "Anchor Year Group",
-       y = "Number of Administrations",
-       title = "Opioid Prescription Count Over Time",
-       fill = "Opioid") +
+  labs(
+    x = "Anchor Year Group",
+    y = "Number of Administrations",
+    title = "Opioid Prescription Count Over Time",
+    fill = "Opioid"
+  ) +
   theme_minimal(base_size = 14) #Stacked Bar chart showing total no. administrations over A_Y_G
 
-ggplot(opioid_plot_df,
-       aes(x = anchor_year_group,
-           y = n_admins,
-           colour = primary_opioid,
-           group = primary_opioid)) +
+ggplot(
+  opioid_plot_df,
+  aes(
+    x = anchor_year_group,
+    y = n_admins,
+    colour = primary_opioid,
+    group = primary_opioid
+  )
+) +
   geom_line(linewidth = 1.1) +
   geom_point(size = 2) +
   scale_colour_manual(values = opioid_colours) +
@@ -513,16 +553,19 @@ ggplot(opioid_plot_df,
   theme_minimal(base_size = 14)
 
 
-
 # purrr is being used to create distinct plots by type of opioid.
-
 
 Opioid_plots <- opioid_plot_df %>%
   split(.$primary_opioid) %>%
   map(
-    ~ ggplot(.x, aes(
-      x = anchor_year_group, y = n_admins, fill = primary_opioid
-    )) +
+    ~ ggplot(
+      .x,
+      aes(
+        x = anchor_year_group,
+        y = n_admins,
+        fill = primary_opioid
+      )
+    ) +
       geom_col(show.legend = FALSE) +
       scale_fill_manual(values = opioid_colours) +
       labs(
@@ -558,17 +601,16 @@ Opioid_plots <- opioid_plot_df %>%
 # This list includes cyclic antidepressants such as amitri and noritri, but as they have multiple uses, we will categorise them and highlight that they are
 # slightly anomalous.
 
-
 ADEP_lookup <- c(
-  "SERTRALINE" ,
-  "FULOXETINE" ,
-  "TRAZODONE" ,
-  "CITALOPRAM" ,
-  "ESCITALOPRAM" ,
-  "PAROXETINE" ,
-  "VENLAFAXINE" ,
-  "DULOXETINE" ,
-  "BUPROPION" ,
+  "SERTRALINE",
+  "FULOXETINE",
+  "TRAZODONE",
+  "CITALOPRAM",
+  "ESCITALOPRAM",
+  "PAROXETINE",
+  "VENLAFAXINE",
+  "DULOXETINE",
+  "BUPROPION",
   "MIRAZIPINE",
   "AMITRIPTYLINE",
   "NORITRYPTYLINE",
@@ -585,7 +627,10 @@ ADEP_lookup <- c(
 Adep_prescriptions <- emar_PtList %>%
   filter(
     grepl(
-      paste(ADEP_lookup, collapse = "|"), toupper(medication)))
+      paste(ADEP_lookup, collapse = "|"),
+      toupper(medication)
+    )
+  )
 
 Adep_simplified <- Adep_prescriptions %>%
   mutate(
@@ -618,70 +663,74 @@ Adep_simplified <- Adep_prescriptions %>%
 Adep_simplified <- Adep_simplified %>%
   mutate(
     Antidepressant_class = case_when(
-      Antidepressant_drug %in% c(
-        "Sertraline",
-        "Fluoxetine",
-        "Citalopram",
-        "Escitalopram",
-        "Paroxetine"
-      ) ~ "SSRI",
-      
-      Antidepressant_drug %in% c(
-        "Venlafaxine",
-        "Desvenlafaxine", 
-        "Duloxetine"
+      Antidepressant_drug %in%
+        c(
+          "Sertraline",
+          "Fluoxetine",
+          "Citalopram",
+          "Escitalopram",
+          "Paroxetine"
+        ) ~ "SSRI",
+
+      Antidepressant_drug %in%
+        c(
+          "Venlafaxine",
+          "Desvenlafaxine",
+          "Duloxetine"
         ) ~ "SNRI",
-      
-      Antidepressant_drug %in% c(
-        "Bupropion",
-        "Mirtazapine",
-        "Trazodone",
-        "Vilazodone",
-        "Vortioxetine"
-      ) ~ "Atypical antidepressant",
-      
-      Antidepressant_drug %in% c(
-        "Amitriptyline", 
-        "Nortriptyline", 
-        "Imipramine", 
-        "Doxepin"
-      ) ~ "Tricyclic",
-      
+
+      Antidepressant_drug %in%
+        c(
+          "Bupropion",
+          "Mirtazapine",
+          "Trazodone",
+          "Vilazodone",
+          "Vortioxetine"
+        ) ~ "Atypical antidepressant",
+
+      Antidepressant_drug %in%
+        c(
+          "Amitriptyline",
+          "Nortriptyline",
+          "Imipramine",
+          "Doxepin"
+        ) ~ "Tricyclic",
+
       TRUE ~ "Other / unclear"
     )
   )
 
 adep_palette <- c(
   # SSRIs
-  "Sertraline"      = "#1F77B4",
-  "Fluoxetine"     = "#AEC7E8",
-  "Citalopram"     = "#2CA02C",
-  "Escitalopram"   = "#98DF8A",
-  "Paroxetine"     = "#17BECF",
-  
-  # SNRIs
-  "Venlafaxine"    = "#FF7F0E",
-  "Desvenlafaxine" = "#FFBB78",
-  "Duloxetine"     = "#D62728",
-  
-  # Atypical antidepressants
-  "Bupropion"      = "#9467BD",
-  "Mirtazapine"    = "#C5B0D5",
-  "Trazodone"      = "#8C564B",
-  "Vilazodone"     = "#E377C2",
-  "Vortioxetine"   = "#F7B6D2",
-  
-  # Tricyclics (kept muted on purpose)
-  "Amitriptyline"  = "#7F7F7F",
-  "Nortriptyline"  = "#BCBD22",
-  "Imipramine"     = "#DBDB8D",
-  "Doxepin"        = "#C7C7C7",
-  
-  # MAOIs (rare → strong but distinct)
-  "Phenelzine"     = "#393B79",
-  "Tranylcypromine"= "#637939"
-)
+  "Sertraline" = "#1F77B4",
+  "Fluoxetine" = "#AEC7E8",
+  "Citalopram" = "#2CA02C",
+  "Escitalopram" = "#98DF8A",
+  "Paroxetine" = "#17BECF",
 
+  # SNRIs
+  "Venlafaxine" = "#FF7F0E",
+  "Desvenlafaxine" = "#FFBB78",
+  "Duloxetine" = "#D62728",
+
+  # Atypical antidepressants
+  "Bupropion" = "#9467BD",
+  "Mirtazapine" = "#C5B0D5",
+  "Trazodone" = "#8C564B",
+  "Vilazodone" = "#E377C2",
+  "Vortioxetine" = "#F7B6D2",
+
+  # Tricyclics (kept muted on purpose, due to multiple usage indications)
+  "Amitriptyline" = "#7F7F7F",
+  "Nortriptyline" = "#BCBD22",
+  "Imipramine" = "#DBDB8D",
+  "Doxepin" = "#C7C7C7",
+
+  # MAOIs (rare strong but distinct)
+  "Phenelzine" = "#393B79",
+  "Tranylcypromine" = "#637939"
+)
+# again, graphics design is not my passion...
 
 AdepCount <- Adep_prescriptions %>%
   count(medication) # all Adeps Administered
@@ -696,8 +745,11 @@ AdepCount_Simple <- Adep_simplified %>%
 #Dropping tricyclics from chart
 
 Adep_simplified <- Adep_simplified %>%
-  left_join(PtList %>%
-              select(anchor_year_group, subject_id), by = "subject_id")
+  left_join(
+    PtList %>%
+      select(anchor_year_group, subject_id),
+    by = "subject_id"
+  )
 
 Adep_no_tca <- Adep_simplified %>%
   filter(Antidepressant_class != "Tricyclic (multiple indications)")
@@ -716,19 +768,24 @@ Adep_no_tca %>%
   count(anchor_year_group, Antidepressant_class)
 
 
-ggplot(Adep_year_counts,
-       aes(x = anchor_year_group, y = n, fill = Antidepressant_class)) +
+ggplot(
+  Adep_year_counts,
+  aes(x = anchor_year_group, y = n, fill = Antidepressant_class)
+) +
   geom_col() +
-  labs(title = "Antidepressant prescriptions by year",
-       x = "Anchor year group",
-       y = "Administered Medication Count",
-       fill = "Drug class") +
+  labs(
+    title = "Antidepressant prescriptions by year",
+    x = "Anchor year group",
+    y = "Administered Medication Count",
+    fill = "Drug class"
+  ) +
   theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1),
-        plot.title = element_text(face = "bold"))
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    plot.title = element_text(face = "bold")
+  )
 
 #~~~~~~~~~~~~~~~~~~~~BY DRUG~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
 
 Adep_Simple_count <- Adep_simplified %>%
   count(anchor_year_group, Antidepressant_drug)
@@ -737,9 +794,14 @@ Adep_Simple_count <- Adep_simplified %>%
 Adep_drug_plots <- Adep_Simple_count %>%
   split(.$Antidepressant_drug) %>%
   map(
-    ~ ggplot(.x, aes(
-      x = anchor_year_group, y = n, fill = Antidepressant_drug
-    )) +
+    ~ ggplot(
+      .x,
+      aes(
+        x = anchor_year_group,
+        y = n,
+        fill = Antidepressant_drug
+      )
+    ) +
       geom_col(show.legend = FALSE) +
       scale_fill_manual(values = adep_palette) +
       labs(
@@ -763,3 +825,174 @@ Adep_drug_plots <- Adep_Simple_count %>%
 #        dpi = 300
 #      ))
 # Comments put in to prevent saving of .tiffs on source.
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+# Model Builing
+# may god have mercy on us all...
+# First things first- I've switched over to positron as opposed to R-studio, wanted to see the difference.
+
+# initial thinking, cox-ph model would be good. this allows for us to identify time to first admission compared to admin. of opiates
+# this means one key thing. I need to rebuild my cohort to account for all of my patients, as i have so far only subset my data by icd code in order to
+# be able to view my data, now duck_db comes into full effect as i know what is in the data, i don't necessarily need to see it.
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~COHORT REBUILDING~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Full_Cohort_AdmDiag <- Patient_Diagnoses %>%
+  left_join(admissions, by = c("subject_id", "hadm_id"))
+
+
+#nrow(Patient_Diagnoses)
+#nrow(Full_Cohort_AdmDiag) # these should be the same, they are...
+
+Full_Cohort <- Full_Cohort_AdmDiag %>%
+  distinct(subject_id)
+
+OUD_diag <- Full_Cohort_AdmDiag %>%
+  filter(
+    startsWith(icd_code, "F11") |
+      startsWith(icd_code, "T40")
+  )
+
+OUD_first <- OUD_diag %>%
+  group_by(subject_id) %>%
+  summarise(
+    first_oud_time = min(admittime),
+    .groups = "drop"
+  )
+
+Cohort_with_OUD <- Full_Cohort %>%
+  left_join(OUD_first, by = "subject_id")
+
+Cohort_with_OUD <- Cohort_with_OUD %>%
+  mutate(
+    event = ifelse(is.na(first_oud_time), 0, 1)
+  ) # This has left us with a 3 col frame, incl all pts subj id, the first time they were admitted with an OUD, and an event variable, we'll use these to
+# build our cox PH model.
+
+First_admission <- admissions %>%
+  group_by(subject_id) %>%
+  summarise(
+    start_time = min(admittime),
+    .groups = "drop"
+  )
+
+Last_followup <- admissions %>%
+  group_by(subject_id) %>%
+  summarise(
+    last_time = max(dischtime),
+    .groups = "drop"
+  )
+
+Analysis_df <- Cohort_with_OUD %>% # This frame now has 5 variables, subjid, the first time pt is admitted w/OUD, their first admission, and thier last admission
+  left_join(First_admission, by = "subject_id") %>%
+  left_join(Last_followup, by = "subject_id")
+
+Analysis_df <- Analysis_df %>%
+  mutate(
+    end_time = dplyr::if_else(
+      event == 1,
+      first_oud_time,
+      last_time
+    ),
+    time_to_event = as.numeric(difftime(end_time, start_time, units = "days"))
+  )
+
+Opioid_exposure <- emar_opioids_simplified %>%
+  select(subject_id, charttime) %>%
+  rename(opioid_time = charttime)
+
+# another problem, the original emar list was subset only by OUD pts, so i need to build new lists for this.
+# benefit of this is that i can use my opi_lookup list that i have already created.
+
+emar_admin <- emar %>%
+  filter(event_txt == "Administered") %>%
+  collect() #  pulls into memory
+
+emar_opioids_all <- emar_admin %>%
+  filter(
+    grepl(paste(Opi_lookup, collapse = "|"), toupper(medication))
+  ) %>%
+  select(subject_id, charttime, medication) # this worked, fanx chatgpt
+
+Opioid_first <- emar_opioids_all %>%
+  group_by(subject_id) %>%
+  summarise(
+    first_opioid_time = min(charttime),
+    .groups = "drop"
+  )
+
+Analysis_df <- Analysis_df %>%
+  left_join(Opioid_first, by = "subject_id")
+
+Analysis_df <- Analysis_df %>%
+  mutate(
+    opioid_exposed = ifelse(
+      !is.na(first_opioid_time) &
+        first_opioid_time < end_time,
+      1,
+      0
+    )
+  ) # creating exposure variable
+
+#table(Analysis_df$event)
+#table(Analysis_df$opioid_exposed)
+
+summary(Analysis_df$time_to_event)
+
+Analysis_df <- Analysis_df %>%
+  left_join(patients, by = "subject_id")
+
+Analysis_df <- Analysis_df %>%
+  left_join(
+    admissions %>%
+      select(
+        "subject_id",
+        "race",
+        "insurance"
+      ),
+    by = "subject_id"
+  )
+
+# these 2 joins give us our variables that we will use in our model.
+# one extra thing that i need to look at is race, MIMIC records them quite specificially, in order to keep the model simple, I need to group
+# into 'standardised' races.
+
+Analysis_df <- Analysis_df %>%
+  mutate(
+    race_grouped = case_when(
+      grepl("WHITE", race, ignore.case = TRUE) ~ "White",
+      grepl("BLACK", race, ignore.case = TRUE) ~ "Black",
+      grepl("ASIAN", race, ignore.case = TRUE) ~ "Asian",
+      grepl("HISPANIC", race, ignore.case = TRUE) ~ "Hispanic",
+      TRUE ~ "Other"
+    )
+  )
+
+Analysis_df$gender <- as.factor(Analysis_df$gender)
+Analysis_df$race_grouped <- as.factor(Analysis_df$race_grouped)
+Analysis_df$insurance <- as.character(Analysis_df$insurance)
+Analysis_df$insurance <- as.factor(Analysis_df$insurance)
+
+Analysis_df$race_grouped <- relevel(Analysis_df$race_grouped, ref = "White")
+Analysis_df$insurance <- relevel(Analysis_df$insurance, ref = "Private")
+
+install.packages("survival")
+library(survival)
+
+cox_model <- coxph(
+  Surv(time_to_event, event) ~
+    opioid_exposed +
+    anchor_age +
+    gender +
+    race_grouped +
+    insurance,
+  data = Analysis_df
+)
+
+summary(cox_model)
+
+install.packages("broom")
+library(broom)
+
+cox_results <- tidy(cox_model, exponentiate = TRUE, conf.int = TRUE)
