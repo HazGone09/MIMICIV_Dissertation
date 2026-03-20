@@ -867,8 +867,8 @@ Cohort_with_OUD <- Full_Cohort %>%
 Cohort_with_OUD <- Cohort_with_OUD %>%
   mutate(
     event = ifelse(is.na(first_oud_time), 0, 1)
-  ) # This has left us with a 3 col frame, incl all pts subj id, the first time they were admitted with an OUD, and an event variable, we'll use these to
-# build our cox PH model.
+  ) # This has left us with a 3 col frame, incl all pts subj id, the first time they were admitted with an OUD, and an event variable
+# we'll use these to  build our cox PH model.
 
 First_admission <- admissions %>%
   group_by(subject_id) %>%
@@ -907,13 +907,13 @@ Opioid_exposure <- emar_opioids_simplified %>%
 
 emar_admin <- emar %>%
   filter(event_txt == "Administered") %>%
-  collect() #  pulls into memory
+  collect() #  apparently this means that i can now brute force all administered meds in the EMAR to show.
 
 emar_opioids_all <- emar_admin %>%
   filter(
     grepl(paste(Opi_lookup, collapse = "|"), toupper(medication))
   ) %>%
-  select(subject_id, charttime, medication) # this worked, fanx chatgpt
+  select(subject_id, charttime, medication) # this worked, fanx chatgpt, i can now work with ALL administered opiates
 
 Opioid_first <- emar_opioids_all %>%
   group_by(subject_id) %>%
@@ -933,7 +933,7 @@ Analysis_df <- Analysis_df %>%
       1,
       0
     )
-  ) # creating exposure variable
+  ) # creating exposure variable, we'll use this to see if opioid exposure is linked to an OUD (it should be...)
 
 #table(Analysis_df$event)
 #table(Analysis_df$opioid_exposed)
@@ -974,8 +974,8 @@ Analysis_df$race_grouped <- as.factor(Analysis_df$race_grouped)
 Analysis_df$insurance <- as.character(Analysis_df$insurance)
 Analysis_df$insurance <- as.factor(Analysis_df$insurance)
 
-Analysis_df$race_grouped <- relevel(Analysis_df$race_grouped, ref = "White")
-Analysis_df$insurance <- relevel(Analysis_df$insurance, ref = "Private")
+Analysis_df$race_grouped <- relevel(Analysis_df$race_grouped, ref = "White") # using white as the baseline for the model
+Analysis_df$insurance <- relevel(Analysis_df$insurance, ref = "Private") # same w/ private
 
 install.packages("survival")
 library(survival)
@@ -996,3 +996,6 @@ install.packages("broom")
 library(broom)
 
 cox_results <- tidy(cox_model, exponentiate = TRUE, conf.int = TRUE)
+# we got stuff!
+# one slight detail, the output shows that 'insurance' is being shown in the results table, without actually being in the insurance list
+# very strange, need to look into it.
