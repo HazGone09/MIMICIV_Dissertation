@@ -884,7 +884,7 @@ Last_followup <- admissions %>%
     .groups = "drop"
   )
 
-Analysis_df <- Cohort_with_OUD %>% # This frame now has 5 variables, subjid, the first time pt is admitted w/OUD, their first admission, and thier last admission
+Analysis_df <- Cohort_with_OUD %>% # This frame now has 5 variables, subject_id, the first time pt is admitted w/OUD, their first admission, and thier last admission
   left_join(First_admission, by = "subject_id") %>%
   left_join(Last_followup, by = "subject_id")
 
@@ -999,3 +999,99 @@ cox_results <- tidy(cox_model, exponentiate = TRUE, conf.int = TRUE)
 # we got stuff!
 # one slight detail, the output shows that 'insurance' is being shown in the results table, without actually being in the insurance list
 # very strange, need to look into it.
+
+# initial obs- opioid exposure is significant (thank fuck)
+# men are predicted to be more likely to develop an OUD than women (33.7%)
+# Within the insurance category (which is a bit wonky), it places greater value on medicaid than medicare, which makes sense,
+# medicaid is the all ages goverment insurance, medicare is the 65+ version, meaning that it should only apply to the older pts.
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# MODEL REFINEMENT
+# lets start off with building a MHC lookup list.
+# looking at the ICD Browser, the majority of MHC codes start with F
+# I want to skip F10-F19 as they are drug induced, and i've already used F11 for my OUD look up table.
+# F00-F09 are Organic, including symptomatic, mental disorders - such as dementia ect, so i dont need these
+
+MH_conditions <- Full_Cohort_AdmDiag %>%
+  filter(
+    grepl("^F2[0-9]|^F3[0-9]|^F4[0-8]", icd_code)
+  ) %>%
+  distinct(subject_id) %>%
+  mutate(MH_flag = 1)
+
+
+Analysis_df <- Analysis_df %>%
+  left_join(MH_conditions, by = "subject_id") %>%
+  mutate(MH_flag = ifelse(is.na(MH_flag), 0, 1)) # binary flag variable for MH conditions, 1=Yes 0=No
+
+
+emar_adep_all <- emar_admin %>%
+  filter(
+    grepl(paste(ADEP_lookup, collapse = "|"), toupper(medication))
+  ) %>%
+  select(subject_id, charttime, medication)
+
+
+Analysis_df <- Analysis_df %>%
+  mutate(MH_flag = as.factor(MH_flag))
+
+
+Adep_class_flags <- Adep_simplified %>%
+  distinct(subject_id, Antidepressant_class) %>%
+  mutate(value = 1) %>%
+  tidyr::pivot_wider(
+    names_from = Antidepressant_class,
+    values_from = value,
+    values_fill = 0
+  )
+
+Analysis_df <- Analysis_df %>%
+  left_join(Adep_class_flags, by = "subject_id") %>%
+  mutate(
+    across(c(SSRI, SNRI, Tricyclic), ~ ifelse(is.na(.), 0, .))
+  )
+
+
+MH_coxph <- coxph(
+  Surv(time_to_event, event) ~
+    total_opioid_admins.y +
+    anchor_age +
+    gender +
+    MH_flag +
+    SSRI +
+    SNRI +
+    Atypical,
+  data = Analysis_df
+)
+# this MH cox looks good, but there is no total_opioid_admins showing up, means we need anohter rebuild. lets get to work
+
+# 1. Build summary
+opioid_summary <- emar_opioids_simplified %>%
+  group_by(subject_id) %>%
+  summarise(
+    total_opioid_admins = n(),
+    opioid_exposure = 1,
+    .groups = "drop"
+  )
+
+# 2. Join
+Analysis_df <- Analysis_df %>%
+  left_join(opioid_summary, by = "subject_id")
+
+# 3. Replace NA
+Analysis_df <- Analysis_df %>%
+  mutate(
+    opioid_exposure = ifelse(is.na(opioid_exposure), 0, opioid_exposure),
+    total_opioid_admins = ifelse(
+      is.na(total_opioid_admins),
+      0,
+      total_opioid_admins
+    )
+  )
+
+
+surv_df <- surv_df %>%
+  left_join(Adep_class_flags, by = "subject_id") %>%
+  mutate(
+    across(c(SSRI, SNRI, Atypical, Tricyclic), ~ ifelse(is.na(.), 0, .))
+  )
