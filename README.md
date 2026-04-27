@@ -1,6 +1,7 @@
 If you've found this repository, welcome to the madness that is my final year dissertation piece
-Course Focus is 'population health and medical science'
-The data used is MIMIC IV v3.1
+Course Focus is 'Medical Sciences and Population Health'
+
+The data used is MIMIC IV v3.1m sourced from physionet.org
 
 Project Aim: This project uses MIMIC-IV data to investigate the development of opioid use disorder (OUD), with the aim of identifying when and in whom OUD emerges following opioid exposure.
 
@@ -39,3 +40,16 @@ Generates figures to illustrate survival patterns, exposure trends, and model ou
 
 09_outputs.R  
 Produces formatted tables for reporting results, including model outputs and diagnostics.
+
+Required MIMIC csvs
+
+d_icd_diagnoses.csv
+admissions.csv
+patients.csv
+diagnoses_icd.csv
+emar.csv
+
+
+
+
+
